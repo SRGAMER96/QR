@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: qr-king-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8916389057:AAFVwogT5jrAokNoBmJix_5yd4_0pfZqUfk
+      - key: ADMIN_TELEGRAM_ID
+        value: "8962632792"
+      - key: SUPPORT_USERNAME
+        value: SRGAMER96
