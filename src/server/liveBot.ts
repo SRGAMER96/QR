@@ -490,25 +490,43 @@ export class LiveTelegramBotRunner {
 
   public pausePolling() {
     this.isPollingPaused = true;
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
     if (this.bot && this.isPollingActive) {
       try {
         this.bot.stop();
       } catch {}
       this.isPollingActive = false;
     }
-    console.log('⏸️ Telegram polling paused.');
+    console.log('⏸️ Telegram polling and watchdog paused to protect production webhook.');
   }
 
   public resumePolling() {
     this.isPollingPaused = false;
     if (!this.isWebhookMode && this.bot && !this.isPollingActive) {
       this.startPollingLoop();
+      this.startWatchdog();
     }
     console.log('▶️ Telegram polling resumed.');
   }
 
   private async startPollingLoop() {
-    if (!this.bot || this.isPollingActive || this.isReconnecting) return;
+    if (!this.bot || this.isPollingActive || this.isReconnecting || this.isPollingPaused || this.isWebhookMode) return;
+
+    try {
+      const whInfo = await this.bot.api.getWebhookInfo();
+      if (whInfo.url) {
+        console.log(`🌐 Active production webhook detected at ${whInfo.url}. Yielding local polling.`);
+        this.isPollingPaused = true;
+        return;
+      }
+    } catch {}
 
     this.isPollingActive = true;
     console.log(`🚀 Starting 24/7 long-polling for @${this.botInfo?.username || 'bot'}...`);
@@ -559,14 +577,14 @@ export class LiveTelegramBotRunner {
       })
       .finally(() => {
         this.isPollingActive = false;
-        if (this.shouldRun && !this.isReconnecting) {
+        if (this.shouldRun && !this.isReconnecting && !this.isPollingPaused && !this.isWebhookMode) {
           this.scheduleReconnect(2000);
         }
       });
   }
 
   private scheduleReconnect(delayMs: number) {
-    if (this.isReconnecting || !this.shouldRun) return;
+    if (this.isReconnecting || !this.shouldRun || this.isPollingPaused || this.isWebhookMode) return;
     this.isReconnecting = true;
 
     if (this.reconnectTimeout) {
@@ -578,7 +596,7 @@ export class LiveTelegramBotRunner {
     this.reconnectTimeout = setTimeout(async () => {
       this.isReconnecting = false;
       this.reconnectTimeout = null;
-      if (this.shouldRun && !this.isPollingActive) {
+      if (this.shouldRun && !this.isPollingActive && !this.isPollingPaused && !this.isWebhookMode) {
         await this.startPollingLoop();
       }
     }, delayMs);
@@ -588,6 +606,7 @@ export class LiveTelegramBotRunner {
     if (this.watchdogTimer) return;
     // Watchdog runs every 15 seconds: ensures bot is always healthy without competing reconnects
     this.watchdogTimer = setInterval(async () => {
+      if (this.isPollingPaused || this.isWebhookMode) return;
       if (this.shouldRun && !this.isPollingActive && !this.isReconnecting && this.bot) {
         console.warn('🚨 Watchdog detected inactive Telegram polling! Reviving bot cleanly...');
         await this.startPollingLoop();

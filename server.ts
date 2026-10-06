@@ -211,16 +211,21 @@ app.post('/api/telegram/verify', async (req: Request, res: Response) => {
 });
 
 async function startServer() {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
 
-  // Start the Live Telegram Bot right now!
-  liveBotRunner.start().then((res) => {
-    if (res.success) {
-      console.log(`🤖 Live Bot Online: @${res.botInfo?.username} (ID: ${res.botInfo?.id})`);
-    } else {
-      console.error('⚠️ Could not start Telegram Bot:', res.error);
-    }
-  });
+  // Only start live Telegram connection in production (Render) or when explicitly requested,
+  // preventing dev server from interfering with Render's live webhook.
+  if (isProd || process.env.ENABLE_DEV_BOT === 'true') {
+    liveBotRunner.start().then((res) => {
+      if (res.success) {
+        console.log(`🤖 Live Bot Online: @${res.botInfo?.username} (ID: ${res.botInfo?.id})`);
+      } else {
+        console.error('⚠️ Could not start Telegram Bot:', res.error);
+      }
+    });
+  } else {
+    console.log('⚡ Development mode: Bot execution delegated to live Render service to ensure zero webhook interference.');
+  }
 
   if (!isProd) {
     // Development mode with Vite middleware
