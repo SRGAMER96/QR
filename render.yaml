@@ -14,3 +14,5 @@ services:
         value: "8962632792"
       - key: SUPPORT_USERNAME
         value: SRGAMER96
+      - key: WEBHOOK_URL
+        value: https://qr-zjrt.onrender.com

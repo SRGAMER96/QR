@@ -440,7 +440,7 @@ export class LiveTelegramBotRunner {
       const webhookBase = 
         process.env.RENDER_EXTERNAL_URL || 
         process.env.WEBHOOK_URL || 
-        (process.env.RENDER === 'true' || process.env.NODE_ENV === 'production' ? 'https://qr-bot-t8l6.onrender.com' : undefined);
+        (process.env.RENDER === 'true' || process.env.NODE_ENV === 'production' ? 'https://qr-zjrt.onrender.com' : undefined);
 
       if (webhookBase && !process.env.FORCE_POLLING) {
         this.isWebhookMode = true;
@@ -604,14 +604,26 @@ export class LiveTelegramBotRunner {
 
   private startWatchdog() {
     if (this.watchdogTimer) return;
-    // Watchdog runs every 15 seconds: ensures bot is always healthy without competing reconnects
+    // Watchdog runs every 20 seconds: ensures bot & webhook are always healthy
     this.watchdogTimer = setInterval(async () => {
+      // In webhook mode, ensure Telegram webhook remains active and registered
+      if (this.isWebhookMode && this.bot && this.webhookUrl) {
+        try {
+          const whInfo = await this.bot.api.getWebhookInfo();
+          if (whInfo.url !== this.webhookUrl) {
+            console.warn(`🔄 Restoring active webhook to: ${this.webhookUrl}`);
+            await this.bot.api.setWebhook(this.webhookUrl, { drop_pending_updates: false });
+          }
+        } catch {}
+        return;
+      }
+
       if (this.isPollingPaused || this.isWebhookMode) return;
       if (this.shouldRun && !this.isPollingActive && !this.isReconnecting && this.bot) {
         console.warn('🚨 Watchdog detected inactive Telegram polling! Reviving bot cleanly...');
         await this.startPollingLoop();
       }
-    }, 15000);
+    }, 20000);
   }
 
   public async stop() {

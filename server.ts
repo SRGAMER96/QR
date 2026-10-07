@@ -33,8 +33,18 @@ app.post('/api/telegram-webhook', (req: Request, res: Response) => {
   return res.status(200).send('OK');
 });
 
-// Health check endpoint
-app.get('/api/health', (_req: Request, res: Response) => {
+// Health check endpoint (invoked 24/7 by UptimeRobot)
+app.get('/api/health', async (_req: Request, res: Response) => {
+  // Self-heal webhook if needed
+  if (liveBotRunner.isWebhookMode && liveBotRunner.bot && liveBotRunner.webhookUrl) {
+    try {
+      const wh = await liveBotRunner.bot.api.getWebhookInfo();
+      if (!wh.url || wh.url !== liveBotRunner.webhookUrl) {
+        await liveBotRunner.bot.api.setWebhook(liveBotRunner.webhookUrl, { drop_pending_updates: false });
+      }
+    } catch {}
+  }
+
   res.json({
     status: 'ok',
     botRunning: liveBotRunner.isRunning,
